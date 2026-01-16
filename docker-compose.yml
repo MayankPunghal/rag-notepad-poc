@@ -1,0 +1,64 @@
+# RAG Brain - Docker Compose Configuration
+# Local multimodal RAG system for home lab deployment
+
+version: '3.8'
+
+services:
+  # Main RAG Brain application
+  rag-brain:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-brain
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist data
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./mlflow:/app/mlflow
+      # Mount .env for API keys
+      - ./.env:/app/.env:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTORCH_CPU_ONLY=1
+      - TOKENIZERS_PARALLELISM=false
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - rag-network
+
+  # Optional: MLflow UI for experiment tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.18.0
+    container_name: rag-brain-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow:/mlflow
+    command: >
+      mlflow server
+      --backend-store-uri /mlflow
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    restart: unless-stopped
+    networks:
+      - rag-network
+    profiles:
+      - mlflow  # Use docker-compose --profile mlflow up to include this service
+
+networks:
+  rag-network:
+    driver: bridge
+
+volumes:
+  mlflow-data:
+    driver: local
